@@ -83,7 +83,7 @@ a_i, b_i, c_i = df.loc[['Ni', 'Si', 'O']].T.values
 
 #Temp
 Temp = np.linspace(2000,2001, 1)  # temperature range
-max_iter = np.linspace(1,1,1)  # maximum number of iterations
+max_iter = np.linspace(1,1000,1000)  # maximum number of iterations
 
 # Initialize array for storing results
 K_O_D_list = np.zeros(len(Temp))
@@ -157,13 +157,12 @@ for i in range(len(Temp)):
         
         K_O_D_frost = (a_prime * c_prime) / (X_mg_wustite_FeO)
         
-    
         # Check convergence
         # print(np.abs(K_O_D - K_O_D_fischer) / K_O_D_fischer)
 
         error_perc_list[j]=np.abs((K_O_D - K_O_D_frost) / K_O_D_frost)
 
-        if abs((K_O_D - K_O_D_frost) / K_O_D_frost) < 0.5:
+        if abs((K_O_D - K_O_D_frost) / K_O_D_frost) < 0.1:
             #print(f"At Temp = {Temp[i]:.0f}K and P = {Pressures:.1f}GPa, K_O_D has converged to {K_O_D:.5f}")
             fo2 = 2*np.log10(X_mg_wustite_FeO/a_prime)
             feo_mols = x_prime/(x_prime + y_prime + z_prime + (u + m + n))
@@ -189,7 +188,7 @@ for i in range(len(Temp)):
             K_O_D_frost_list[i] = K_O_D_frost
             break
         else:
-            x_prime = x+a - abs((K_O_D - K_O_D_frost) / K_O_D_frost) * x_prime + a_prime
+            x_prime = x - .1 #abs((K_O_D - K_O_D_frost) / K_O_D_frost) * x_prime + a_prime
             x_prime_iter_list.append(x_prime)
     else:
         #print(f"At Temp = {Temp[i]:.0f}K and P = {Pressures:.1f}GPa, K_O_D did not converge within 10 iterations.")

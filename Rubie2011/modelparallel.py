@@ -35,8 +35,9 @@ df = pd.DataFrame(data).set_index('Element').fillna(0)
 a_i, b_i, c_i = df.loc[['Ni', 'Si', 'O']].T.values
 
 #Temp
-temp_range = np.linspace(2000, 2002, 2)  # temperature range
+temp_range = np.linspace(2000, 2100, 100)  # temperature range
 max_iter = np.linspace(1,1000,1000)  # maximum number of iterations
+
 # Initialize arrays for storing results
 K_O_D_list = np.zeros(len(temp_range))
 K_O_D_frost_list = np.zeros(len(temp_range))
@@ -69,16 +70,20 @@ for i in range(len(temp_range)):
         # Step 2
         y_prime = (x_prime * (y + b)) / ((x + a - x_prime) * (10 ** log_K_Ni_D) + x_prime)  # Eq S.15
         # Step 3
+        a_prime = x + a - x_prime  # S.14 A
+        #print (a_prime + x_prime - a - x)
+        b_prime = y + b - y_prime  # S.14 B
+        #print(b_prime + y_prime - b - y)
         # Step 3
-        # Ensure that a_prime and b_prime are positive
-        if x + a < x_prime:
-            a_prime = 0
-        else:
-            a_prime = x + a - x_prime  # S.14 A
-        if y < -b:
-            b_prime = 0
-        else:
-            b_prime = y + b - y_prime  # S.14 B
+        # # Ensure that a_prime and b_prime are positive
+        # if x + a < x_prime:
+        #     a_prime = 0
+        # else:
+        #     a_prime = x + a - x_prime  # S.14 A
+        # if y < -b:
+        #     b_prime = 0
+        # else:
+        #     b_prime = y + b - y_prime  # S.14 B
 
         # Step 4
         # Define alpha, gamma, sigma
@@ -90,11 +95,8 @@ for i in range(len(temp_range)):
         A = 3 * x_prime ** 2 - a_prime ** 2 * (10 ** log_K_Si_D)  # S17 A
         B = gamma * x_prime ** 2 + 3 * alpha * x_prime ** 2 + a_prime ** 2 * sigma * (10 ** log_K_Si_D)  # S17 B
         C = alpha * gamma * x_prime ** 2  # S17 C
-        discriminant = B ** 2 - 4 * A * C
-        if discriminant < 0:
-            z_prime = 0
-        else:
-            z_prime = (-B + np.sqrt(discriminant)) / (2 * A)  # S 17 Solve for z'
+        z_prime = (-B + np.sqrt(B ** 2 - 4 * A * C)) / (2 * A)  # S 17 Solve for z'
+
         # Step 5
         c_prime = x + y + 2 * z + c - x_prime - y_prime - 2 * z_prime  # S14 C
 
@@ -135,6 +137,7 @@ for i in range(len(temp_range)):
             X_mg_wustite_FeO_list[i] = X_mg_wustite_FeO
             a_prime_list[i] = a_prime
             x_prime_list[i] = x_prime
+            print(x_prime)
             K_O_D_frost_list[i] = K_O_D_frost
             break
         elif j == int(len(max_iter)) - 1:
@@ -149,7 +152,7 @@ for i in range(len(temp_range)):
             # Update x_prime and continue iterating
             x_prime = x_prime - .01 * ((K_O_D - K_O_D_frost) / K_O_D_frost) * x_prime
 
-        
+
 # Plot error percentage vs. iteration number for the current temperature
 plt.plot(range(1, len(error_perc_list) + 1), error_perc_list)
 plt.xlabel('Iteration number')
@@ -157,9 +160,16 @@ plt.ylabel('Error percentage')
 plt.title(f"Error percentage vs. iteration number at Temp = {temp_range[i]:.0f}K and P = {Pressures:.1f}GPa")
 plt.show()
 
-plt.plot(temp_range, fe_mols_list, label='fe_mols')
-plt.plot(temp_range, feo_mols_list , label='feo_mols')
+plt.plot(temp_range, K_O_D_list, label='K_O_D')
+plt.plot(temp_range, K_O_D_frost_list , label='K_O_D_frost')
 plt.legend()
 plt.xlabel('Temperature (K)')
-plt.ylabel('Mole fraction')
+plt.ylabel('K_O_D')
 plt.show()
+
+# plt.plot(1, len(fe_mols_list)+1, fe_mols_list, label='fe_mols')
+# plt.plot(1, len(feo_mols_list)+1, feo_mols_list , label='feo_mols')
+# plt.legend()
+# plt.xlabel('Temperature (K)')
+# plt.ylabel('Mole fraction')
+# plt.show()

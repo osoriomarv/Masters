@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from Ironwustite import Calc_IW
-
 import matplotlib.pyplot as plt
 
 # # Oxidized Compostion
@@ -16,16 +15,16 @@ import matplotlib.pyplot as plt
 # c = 0 # O
 # d = 0 # Si
 
-# x=  0.400966654
-# y=	0.416897598
-# z=	0.131973859
-# u=	0.020224404
-# m=	0.029918118
-# n=	1.93658E-05
-# a=  0.215330677
-# b=	0.019266662
-# c=	0.003302661
-# d=	0
+x=  0.400966654
+y=	0.416897598
+z=	0.131973859
+u=	0.020224404
+m=	0.029918118
+n=	1.93658E-05
+a=  0.215330677
+b=	0.019266662
+c=	0.003302661
+d=	0
 
 # #Reduced Compositon
 # x = 0.7110226145582626
@@ -51,20 +50,8 @@ import matplotlib.pyplot as plt
 # c=	0
 # d=	0.089968889
 
-#reduced composition
-x = 0.855
-y = 0.005
-z = 2.000
-a = 0.144
-b = 0.045
-c = 0.000
-d = 1.127
-u = 0.419
-m = 0.051
-n = 0.030
-
 # Input parameters for a single temperature and pressure
-Pressures = 40  # GPa
+Pressures = 10  # GPa
 
 # Constants
 tolerance = 1e-3  # set a tolerance for the convergence criterion
@@ -82,7 +69,7 @@ df = pd.DataFrame(data).set_index('Element').fillna(0)
 a_i, b_i, c_i = df.loc[['Ni', 'Si', 'O']].T.values
 
 #Temp
-Temp = np.linspace(2000,4000, 1000)  # temperature range
+Temp = np.linspace(2000,2010, 10)  # temperature range
 max_iter = np.linspace(1,1000,1000)  # maximum number of iterations
 
 # Initialize array for storing results
@@ -118,11 +105,9 @@ for i in range(len(Temp)):
     # Convert from log to real units
     K_O_D_fischer = round(10 ** log_K_O_D, 5)
 
-
-
     for j in range(int(len(max_iter))):
         # Step 2
-        y_prime = x_prime * (y + b) / ((x + a - x_prime) * (10 ** log_K_Ni_D) + x_prime)  # Eq S.15
+        y_prime = (x_prime * (y + b)) / ((x + a - x_prime) * (10 ** log_K_Ni_D) + x_prime)  # Eq S.15
         # Step 3
         a_prime = x + a - x_prime  # S.14 A
         b_prime = y + b - y_prime  # S.14 B
@@ -131,7 +116,7 @@ for i in range(len(Temp)):
         alpha = z + d
         gamma = a_prime + b_prime + x + y + 3 * z + c - x_prime - y_prime + d
         sigma = x_prime + y_prime + u + m + n
-                # solve the quadratic equation to obtain z_prime
+        # solve the quadratic equation to obtain z_prime
         A = 3 * x_prime ** 2 - a_prime ** 2 * (10 ** log_K_Si_D)  # S17 A
         B = gamma * x_prime ** 2 + 3 * alpha * x_prime ** 2 + a_prime ** 2 * sigma * (10 ** log_K_Si_D)  # S17 B
         C = alpha * gamma * x_prime ** 2  # S17 C
@@ -139,8 +124,9 @@ for i in range(len(Temp)):
 
         # Step 5
         c_prime = x + y + 2 * z + c - x_prime - y_prime - 2 * z_prime  # S14 C
-
+        print(f"c_prime = {c_prime}")
         d_prime = z + d - z_prime  # S14 D
+        print(f"d_prime = {d_prime}")
         # Step 6
         X_sil_FeO = x_prime / (x_prime + y_prime + z_prime + (u + m + n))
         X_mg_wustite_FeO = 1.148 * X_sil_FeO + 1.319 * X_sil_FeO ** 2  # S6
@@ -148,37 +134,37 @@ for i in range(len(Temp)):
         # Step 7
         # Sub into S11
         K_O_D_1 = a_prime * b_prime
-        K_O_D_2 = X_mg_wustite_FeO * (a_prime + b_prime + c_prime + d_prime) ** 2
+        K_O_D_2 = X_sil_FeO * (a_prime + b_prime + c_prime + d_prime) ** 2
         K_O_D = K_O_D_1 / K_O_D_2
 
-        
         # Check convergence
         # print(np.abs(K_O_D - K_O_D_fischer) / K_O_D_fischer)
 
         error_perc_list[j]=np.abs(K_O_D - K_O_D_fischer) / K_O_D_fischer
 
-        if abs(K_O_D - K_O_D_fischer) / K_O_D_fischer < 0.01:
+        if abs(K_O_D - K_O_D_fischer) / K_O_D_fischer < 0.1:
             #print(f"At Temp = {Temp[i]:.0f}K and P = {Pressures:.1f}GPa, K_O_D has converged to {K_O_D:.5f}")
-            fo2 = 2*np.log10(X_mg_wustite_FeO/a_prime)
-            feo_mols = x_prime/(x_prime + y_prime + z_prime + (u + m + n))
-            
-            
-            fe_mols = a_prime/(a_prime + b_prime + c_prime + d_prime)
+            fe_mols_met = a_prime/(a_prime + b_prime + c_prime + d_prime)
             ni_mols_met = b_prime/(a_prime + b_prime + c_prime + d_prime)
             o_mols_met = c_prime/(a_prime + b_prime + c_prime + d_prime)
             si_mols_met = d_prime/(a_prime + b_prime + c_prime + d_prime)
 
-            del_iw_log = 2*np.log10(feo_mols/fe_mols)              
+            del_iw_frost = 2*np.log10(X_mg_wustite_FeO/ fe_mols_met)
+            print(del_iw_frost)
+            feo_mols = x_prime/(x_prime + y_prime + z_prime + (u + m + n))
+
+            del_iw_log = 2*np.log10(feo_mols/fe_mols_met)   
+            print(del_iw_log)
+
             IW_FO2 = Calc_IW(np.array([Temp[i]]))
            
-            Del_IW = fo2 
-            
+            Del_IW = del_iw_frost
             si_mols_met_list[i] = si_mols_met
             ni_mols_met_list[i] = ni_mols_met
             o_mols_met_list[i] = o_mols_met
             IW_FO2_list[i] = IW_FO2
             del_iw_log_list[i] = del_iw_log
-            fe_mols_list[i] = fe_mols
+            fe_mols_list[i] = fe_mols_met
             feo_mols_list[i] = feo_mols
             K_O_D_list[i] = K_O_D
             X_mg_wustite_FeO_list[i] = X_mg_wustite_FeO
@@ -189,8 +175,6 @@ for i in range(len(Temp)):
         else:
             x_prime = x_prime + .01 * (K_O_D - K_O_D_fischer) / K_O_D_fischer * x_prime
             x_prime_iter_list.append(x_prime)
-
-
     else:
         #print(f"At Temp = {Temp[i]:.0f}K and P = {Pressures:.1f}GPa, K_O_D did not converge within 10 iterations.")
         K_O_D_list[i] = np.nan
