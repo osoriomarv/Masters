@@ -1,56 +1,62 @@
-def asteroid_composition(Si_wt, Ca_wt, Al_wt, Mg_wt, O_wt, Fe_wt, Ni_wt, Si_ppm, Ca_ppm, Al_ppm, Mg_ppm, Fe_ppm, Ni_ppm):
-    # Calculate the total weight of the asteroid in grams
-    total_weight = 100.0 / (Si_wt + Ca_wt + Al_wt + Mg_wt + O_wt + Fe_wt + Ni_wt) * 1000000.0
+def element_distribution(Si, Ca, Al, Mg, O, Fe, Ni):
+    # Calculate the total weight in mg/g
+    total_weight = Si + Ca + Al + Mg + O + Fe + Ni
 
-    # Convert the weight percentages to masses in grams
-    Si = Si_wt / 100.0 * total_weight
-    Ca = Ca_wt / 100.0 * total_weight
-    Al = Al_wt / 100.0 * total_weight
-    Mg = Mg_wt / 100.0 * total_weight
-    O = O_wt / 100.0 * total_weight
-    Fe = Fe_wt / 100.0 * total_weight
-    Ni = Ni_wt / 100.0 * total_weight
+    # Calculate the amount of oxygen needed for each oxide in mg/g
+    MgO = Mg
+    Al2O3 = Al * 1.5
+    CaO = Ca
+    remaining_O = O - (MgO + Al2O3 + CaO)
 
-    # Convert the ppm values to masses in grams
-    Si += Si_ppm / 1000000.0 * total_weight
-    Ca += Ca_ppm / 1000000.0 * total_weight
-    Al += Al_ppm / 1000000.0 * total_weight
-    Mg += Mg_ppm / 1000000.0 * total_weight
-    Fe += Fe_ppm / 1000000.0 * total_weight
-    Ni += Ni_ppm / 1000000.0 * total_weight
+    # Calculate the amount of SiO2 that can be formed from the remaining oxygen
+    SiO2 = min(remaining_O, Si)
+    remaining_O -= SiO2
+    Si -= SiO2
 
-    # Calculate the total number of oxygen atoms
-    total_O = O - (Mg + Al + Ca)
+    # Calculate the amount of Si and free oxygen
+    free_O = remaining_O
+    remaining_O -= free_O
+    free_Si = max(Si - SiO2, 0)
 
-    # Calculate the number of oxygen atoms required to satisfy MgO
-    MgO_O = Mg
-    total_O -= MgO_O
+    # Calculate the weight percentage of each element
+    wt_Si = 100 * Si / total_weight
+    wt_Ca = 100 * Ca / total_weight
+    wt_Al = 100 * Al / total_weight
+    wt_Mg = 100 * Mg / total_weight
+    wt_O = 100 * (MgO + Al2O3 + CaO + SiO2 + free_O) / total_weight
+    wt_Fe = 100 * Fe / total_weight
+    wt_Ni = 100 * Ni / total_weight
 
-    # Calculate the number of oxygen atoms required to satisfy Al2O3
-    Al2O3_O = Al * 3
-    total_O -= Al2O3_O
+    # Calculate the molar fraction of each element
+    molar_masses = {'Si': 28.085, 'Ca': 40.078, 'Al': 26.982, 'Mg': 24.305,
+                    'O': 15.999, 'Fe': 55.845, 'Ni': 58.693}
+    total_moles = sum([elem_weight / molar_masses[elem] for elem, elem_weight in
+                       {'Si': Si, 'Ca': Ca, 'Al': Al, 'Mg': Mg, 'O': MgO + Al2O3 + CaO + SiO2 + free_O,
+                        'Fe': Fe, 'Ni': Ni}.items()])
+    mol_Si = (Si / molar_masses['Si']) / total_moles
+    mol_Ca = (Ca / molar_masses['Ca']) / total_moles
+    mol_Al = (Al / molar_masses['Al']) / total_moles
+    mol_Mg = (Mg / molar_masses['Mg']) / total_moles
+    mol_O = ((MgO + Al2O3 + CaO + SiO2 + free_O) / molar_masses['O']) / total_moles
+    mol_Fe = (Fe / molar_masses['Fe']) / total_moles
+    mol_Ni = (Ni / molar_masses['Ni']) / total_moles
 
-    # Calculate the number of oxygen atoms required to satisfy CaO
-    CaO_O = Ca
-    total_O -= CaO_O
+    # Return the results as a dictionary
+    return {'Si': {'wt%': wt_Si, 'mol_frac': mol_Si, 'mg/g': Si},
+            'Ca': {'wt%': wt_Ca, 'mol_frac': mol_Ca, 'mg/g': Ca},
+            'Al': {'wt%': wt_Al, 'mol_frac': mol_Al, 'mg/g': Al},
+            'Mg': {'wt%': wt_Mg, 'mol_frac': mol_Mg, 'mg/g': Mg},
+            'O':  {'wt%': wt_O, 'mol_frac': mol_O, 'mg/g': MgO + Al2O3 + CaO + SiO2 + free_O},
+            'Fe': {'wt%': wt_Fe, 'mol_frac': mol_Fe, 'mg/g': Fe},
+            'Ni': {'wt%': wt_Ni, 'mol_frac': mol_Ni, 'mg/g': Ni},
+            'SiO2': {'wt%': 100 * SiO2 / total_weight, 'mg/g': SiO2},
+            'free_O': {'wt%': 100 * free_O / total_weight, 'mg/g': free_O},
+            'free_Si': {'mg/g': free_Si}}
 
-    # Calculate the number of oxygen atoms available for SiO2
-    SiO2_O = max(total_O, 0)
-
-    # Calculate the number of Si atoms available
-    Si_left = Si - SiO2_O
-
-    # Report the composition
-    print("MgO:", Mg)
-    print("Al2O3:", Al)
-    print("CaO:", Ca)
-    print("SiO2:", SiO2_O)
-    print("Si:", Si_left)
-    print("Fe:", Fe)
-    print("Ni:", Ni)
-    print("Free O:", max(total_O, 0))
-
-if __name__ == '__main__':
-    # Enstatite Comp
-    
-    asteroid_composition(2.3, 4.5, 6.7, 8.9, 70.1, 0.01, 0.02, 123.4, 567.8, 910.1, 111.2, 33.4, 55.6)
+if __name__ == "__main__": 
+    result = element_distribution(186, 10.1, 10.5, 141, 310, 220, 13)
+    for elem, data in result.items():
+        print(elem + ':')
+        print('\twt%:', data['wt%'])
+        print('\tmol fraction:', data['mol_frac'])
+        print('\tdistribution (mg/g):', data['mg/g'])
