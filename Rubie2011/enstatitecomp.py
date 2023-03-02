@@ -18,12 +18,18 @@ def element_distribution(Si, Ca, Al, Mg, O, Fe, Ni):
     remaining_O -= free_O
     free_Si = max(Si - SiO2, 0)
 
+    # Calculate the weight percentage of each oxide
+    wt_MgO = 100 * MgO / total_weight
+    wt_Al2O3 = 100 * Al2O3 / total_weight
+    wt_CaO = 100 * CaO / total_weight
+    wt_SiO2 = 100 * SiO2 / total_weight
+    wt_free_O = 100 * free_O / total_weight
+
     # Calculate the weight percentage of each element
     wt_Si = 100 * Si / total_weight
     wt_Ca = 100 * Ca / total_weight
     wt_Al = 100 * Al / total_weight
     wt_Mg = 100 * Mg / total_weight
-    wt_O = 100 * (MgO + Al2O3 + CaO + SiO2 + free_O) / total_weight
     wt_Fe = 100 * Fe / total_weight
     wt_Ni = 100 * Ni / total_weight
 
@@ -40,23 +46,30 @@ def element_distribution(Si, Ca, Al, Mg, O, Fe, Ni):
     mol_O = ((MgO + Al2O3 + CaO + SiO2 + free_O) / molar_masses['O']) / total_moles
     mol_Fe = (Fe / molar_masses['Fe']) / total_moles
     mol_Ni = (Ni / molar_masses['Ni']) / total_moles
+    mol_MgO = (MgO / molar_masses['Mg'] + 0.5 * mol_O) / total_moles
+    mol_Al2O3 = (Al2O3 / molar_masses['Al'] + 1.5*mol_O) / total_moles
+    mol_CaO = (CaO / molar_masses['Ca'] + mol_O) / total_moles 
+    mol_SiO2 = (SiO2 / molar_masses['Si'] + 2 * mol_O) / total_moles
 
     # Return the results as a dictionary
-    return {'Si': {'wt%': wt_Si, 'mol_frac': mol_Si, 'mg/g': Si},
+    return {'MgO': {'wt%': wt_MgO, 'mol_frac': mol_MgO, 'mg/g': MgO},
+            'Al2O3': {'wt%': wt_Al2O3, 'mol_frac': mol_Al2O3, 'mg/g': Al2O3},
+            'CaO': {'wt%': wt_CaO, 'mol_frac': mol_CaO, 'mg/g': CaO},
+            'SiO2': {'wt%': wt_SiO2, 'mol_frac': mol_SiO2, 'mg/g': SiO2},
+            'free_O': {'wt%': wt_free_O, 'mg/g': free_O},
+            'Si': {'wt%': wt_Si, 'mol_frac': mol_Si, 'mg/g': Si},
             'Ca': {'wt%': wt_Ca, 'mol_frac': mol_Ca, 'mg/g': Ca},
             'Al': {'wt%': wt_Al, 'mol_frac': mol_Al, 'mg/g': Al},
             'Mg': {'wt%': wt_Mg, 'mol_frac': mol_Mg, 'mg/g': Mg},
-            'O':  {'wt%': wt_O, 'mol_frac': mol_O, 'mg/g': MgO + Al2O3 + CaO + SiO2 + free_O},
             'Fe': {'wt%': wt_Fe, 'mol_frac': mol_Fe, 'mg/g': Fe},
             'Ni': {'wt%': wt_Ni, 'mol_frac': mol_Ni, 'mg/g': Ni},
-            'SiO2': {'wt%': 100 * SiO2 / total_weight, 'mg/g': SiO2},
-            'free_O': {'wt%': 100 * free_O / total_weight, 'mg/g': free_O},
             'free_Si': {'mg/g': free_Si}}
 
 if __name__ == "__main__": 
     result = element_distribution(186, 10.1, 10.5, 141, 310, 220, 13)
     for elem, data in result.items():
         print(elem + ':')
+        print('\tmg/g:', data['mg/g'])
+        if 'mol_frac' in data:
+            print('\tmol fraction:', data['mol_frac'])
         print('\twt%:', data['wt%'])
-        print('\tmol fraction:', data['mol_frac'])
-        print('\tdistribution (mg/g):', data['mg/g'])
