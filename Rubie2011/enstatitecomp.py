@@ -72,4 +72,4 @@ if __name__ == "__main__":
         print('\tmg/g:', data['mg/g'])
         if 'mol_frac' in data:
             print('\tmol fraction:', data['mol_frac'])
-        print('\twt%:', data['wt%'])
+            print('\twt%:', data['wt%'])
