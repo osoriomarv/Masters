@@ -1,7 +1,7 @@
 def element_distribution(Si, Ca, Al, Mg, O, Fe, Ni):
     # Calculate the total weight in mg/g
     total_weight = Si + Ca + Al + Mg + O + Fe + Ni
-
+    
     # Calculate the amount of oxygen needed for each oxide in mg/g
     MgO = Mg
     Al2O3 = Al * 1.5
