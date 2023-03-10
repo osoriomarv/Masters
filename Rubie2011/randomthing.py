@@ -1,61 +1,60 @@
 import numpy as np
 import pandas as pd
-from Ironwustite import Calc_IW
 import matplotlib.pyplot as plt
+import time
 
-# # Oxidized Compostion
-# x = 0.0672935926615133 # FeO
-# y = 0 # NiO
-# z = 0.2044532676017216 # SiO2
-# u = 0.21257647049048262 # Mg
-# m = 0.010312442368560392 # Al
-# n = 0.015255276180658181 # Ca
-# a = 0.4498580094305469 # Fe
-# b = 0.04025094126651692 # Ni
-# c = 0 # O
-# d = 0 # Si
+start_time = time.time()
 
-x=  0.400966654
-y=	0.416897598
-z=	0.131973859
-u=	0.020224404
-m=	0.029918118
-n=	1.93658E-05
-a=  0.215330677
-b=	0.019266662
-c=	0.003302661
-d=	0
+#Calculate Bulk composition defined by SiO2, MgO, FeO, Al2O3, CaO and NiO
+#Based on Rubie et al 2011. Heterogenous accretion model.
+# bulk composition,
+# SiO2, MgO, FeO, Al2O3, CaO, NiO
+melt_wt = [48.84, 41.79, 0.06, 5.13, 4.17, 0.0]
+melt_mm = [28.19 + 16, 24.31 + 16, 55.85 + 16, 26.98 + 16 * 1.5, 40.08 + 16, 58.59 + 16]
+melt_mols_i = np.array(melt_wt) / np.array(melt_mm)
+melt_mol_frac_i = melt_mols_i / np.sum(melt_mols_i)
+#Metal component
+# Fe, Ni, O, Si
+metal_wt = [85.89, 5.00, 0, 9.17]
+metal_mm = [55.85, 58.59, 16, 28.19]
+metal_mols_i = np.array(metal_wt) / np.array(metal_mm)
+metal_mol_frac_i = metal_mols_i / np.sum(metal_mols_i)
 
-# #Reduced Compositon
-# x = 0.7110226145582626
-# y = 0.019134930618154617
-# z = 1.5447274878339456
-# u = 0.001704378306764529
-# m = 0.5471971473544683
-# n = 0.007702323063130593
-# a = 0.05407015393419428
-# b = 0.03154665921427567
-# c = 0.08617081478221545
-# d = 0.02018916906720182
+#melt fraction needed to distribute metal vs silicate distribution
+Fe_met_frac = 0.999
+metal_silicate_ratio = Fe_met_frac * melt_mols_i[2] / (metal_mols_i[0] - Fe_met_frac * metal_mols_i[0])
 
-#Reduced Composition
-# x=	0.000422782
-# y=	0
-# z=	0.411564281
-# u=	0.524869719
-# m=	0.025472964
-# n=	0.0376461
-# a=	0.422352054
-# b=	0.023479057
-# c=	0
-# d=	0.089968889
+metal_mols_i_scaled = metal_mols_i * metal_silicate_ratio
+
+# bulk cation,Si,Mg,Fe,Al,Ca,Ni
+bulk_cat = np.array([melt_mols_i[0] + metal_mols_i_scaled[3], melt_mols_i[1],
+                     melt_mols_i[2] + metal_mols_i_scaled[0], melt_mols_i[3],
+                     melt_mols_i[4], metal_mols_i_scaled[1]])
+# bulk O
+bulk_O = melt_mols_i[0] * 2 + melt_mols_i[1] + melt_mols_i[2] + melt_mols_i[3] * 1.5 + melt_mols_i[4]
+bulk_comp = np.concatenate((bulk_cat, [bulk_O]))
+
+#Silicate Component
+x = melt_mols_i[2]
+y = melt_mols_i[5]
+z = melt_mols_i[0]
+u = melt_mols_i[1]
+m = melt_mols_i[2]
+n = melt_mols_i[5]
+
+#Metal component
+a = metal_mols_i_scaled[0]
+b = metal_mols_i_scaled[1]
+c = metal_mols_i_scaled[2]
+d = metal_mols_i_scaled[3]
 
 # Input parameters for a single temperature and pressure
 Pressures = 10  # GPa
+Temp = np.linspace(2000,3500,1000)
 
-# Constants
+# Search Parameters
 tolerance = 1e-3  # set a tolerance for the convergence criterion
-R = 8.314 # Gas Constant
+max_iter = np.linspace(1,1000,1000)  # maximum number of iterations
 
 # Create DataFrame for a_i, b_i, c_i values
 data = {'Element': ['Ni', 'Si', 'O'],
@@ -68,10 +67,6 @@ df = pd.DataFrame(data).set_index('Element').fillna(0)
 # Extract a_i, b_i, c_i values from DataFrame using .loc[]
 a_i, b_i, c_i = df.loc[['Ni', 'Si', 'O']].T.values
 
-#Temp
-Temp = np.linspace(2000,2010, 10)  # temperature range
-max_iter = np.linspace(1,1000,1000)  # maximum number of iterations
-
 # Initialize array for storing results
 K_O_D_list = np.zeros(len(Temp))
 X_mg_wustite_FeO_list = np.zeros(len(Temp))
@@ -83,9 +78,6 @@ a_prime_list = np.zeros(len(Temp))
 Del_IW_list = np.zeros(len(Temp))
 IW_FO2_list = np.zeros(len(Temp))
 si_mols_met_list = np.zeros(len(Temp))
-
-error_perc_list = np.zeros(len(max_iter))
-
 ni_mols_met_list = np.zeros(len(Temp))
 o_mols_met_list= np.zeros(len(Temp))
 
@@ -95,19 +87,21 @@ x_prime_iter_list = []
 x_prime = .01  # initial guess for x_prime at 1000 K and 10 GPa
 
 for i in range(len(Temp)):
-
-    log_K_O_D = a_i[2] + (b_i[2] / Temp[i]) + (c_i[2] * Pressures) / (Temp[i])
-
-    log_K_Si_D = a_i[1] + (b_i[1] / Temp[i])
-
-    log_K_Ni_D = a_i[0] + (b_i[0] / Temp[i]) + (c_i[0] * Pressures) / (Temp[i])
-
-    # Convert from log to real units
-    K_O_D_fischer = round(10 ** log_K_O_D, 5)
+    #Gas Constant
+    R = 8.314 # Gas Constant
+    #Oxygen
+    log_K_O_D = (a_i[2] + (b_i[2] / Temp[i]) + (c_i[2] * Pressures) / (Temp[i]))
+    K_O_D_fischer = round(10**log_K_O_D, 5)
+    #Silicon
+    log_K_Si_D = (a_i[1] + (b_i[1] / Temp[i]))
+    K_Si_D = round(10**log_K_Si_D, 5)
+    #Nickel
+    log_K_Ni_D = (a_i[0] + (b_i[0] / Temp[i]) + (c_i[0] * Pressures) / (Temp[i]))
+    K_Ni_D = round(10**log_K_Ni_D, 5)
 
     for j in range(int(len(max_iter))):
         # Step 2
-        y_prime = (x_prime * (y + b)) / ((x + a - x_prime) * (10 ** log_K_Ni_D) + x_prime)  # Eq S.15
+        y_prime = (x_prime * (y + b)) / ((x + a - x_prime) * (K_Ni_D) + x_prime)  # Eq S.15
         # Step 3
         a_prime = x + a - x_prime  # S.14 A
         b_prime = y + b - y_prime  # S.14 B
@@ -117,16 +111,14 @@ for i in range(len(Temp)):
         gamma = a_prime + b_prime + x + y + 3 * z + c - x_prime - y_prime + d
         sigma = x_prime + y_prime + u + m + n
         # solve the quadratic equation to obtain z_prime
-        A = 3 * x_prime ** 2 - a_prime ** 2 * (10 ** log_K_Si_D)  # S17 A
-        B = gamma * x_prime ** 2 + 3 * alpha * x_prime ** 2 + a_prime ** 2 * sigma * (10 ** log_K_Si_D)  # S17 B
+        A = 3 * x_prime ** 2 - a_prime ** 2 * (K_Si_D)  # S17 A
+        B = (gamma * x_prime ** 2 + 3 * alpha * x_prime ** 2 + a_prime ** 2 * sigma * (K_Si_D))  # S17 B
         C = alpha * gamma * x_prime ** 2  # S17 C
-        z_prime = (-B + np.sqrt(B ** 2 - 4 * A * C)) / (2 * A)  # S 17 Solve for z'
+        z_prime = (-B + np.sqrt(B ** 2 - 4 * A * C)) / (2 * A) # S 17 Solve for z'
 
         # Step 5
         c_prime = x + y + 2 * z + c - x_prime - y_prime - 2 * z_prime  # S14 C
-        print(f"c_prime = {c_prime}")
         d_prime = z + d - z_prime  # S14 D
-        print(f"d_prime = {d_prime}")
         # Step 6
         X_sil_FeO = x_prime / (x_prime + y_prime + z_prime + (u + m + n))
         X_mg_wustite_FeO = 1.148 * X_sil_FeO + 1.319 * X_sil_FeO ** 2  # S6
@@ -140,29 +132,23 @@ for i in range(len(Temp)):
         # Check convergence
         # print(np.abs(K_O_D - K_O_D_fischer) / K_O_D_fischer)
 
-        error_perc_list[j]=np.abs(K_O_D - K_O_D_fischer) / K_O_D_fischer
-
-        if abs(K_O_D - K_O_D_fischer) / K_O_D_fischer < 0.1:
+        if abs((K_O_D - K_O_D_fischer) / K_O_D_fischer).all() < 0.01:
             #print(f"At Temp = {Temp[i]:.0f}K and P = {Pressures:.1f}GPa, K_O_D has converged to {K_O_D:.5f}")
             fe_mols_met = a_prime/(a_prime + b_prime + c_prime + d_prime)
             ni_mols_met = b_prime/(a_prime + b_prime + c_prime + d_prime)
             o_mols_met = c_prime/(a_prime + b_prime + c_prime + d_prime)
             si_mols_met = d_prime/(a_prime + b_prime + c_prime + d_prime)
 
-            del_iw_frost = 2*np.log10(X_mg_wustite_FeO/ fe_mols_met)
-            print(del_iw_frost)
             feo_mols = x_prime/(x_prime + y_prime + z_prime + (u + m + n))
+            nio_mols = y_prime/(x_prime + y_prime + z_prime + (u + m + n))
+            sio2_mols = z_prime/(x_prime + y_prime + z_prime + (u + m + n))
+            #Calc del_Iw = 2*log10(x_sil_FeO/x_met_fe)
 
             del_iw_log = 2*np.log10(feo_mols/fe_mols_met)   
-            print(del_iw_log)
-
-            IW_FO2 = Calc_IW(np.array([Temp[i]]))
-           
-            Del_IW = del_iw_frost
+            
             si_mols_met_list[i] = si_mols_met
             ni_mols_met_list[i] = ni_mols_met
             o_mols_met_list[i] = o_mols_met
-            IW_FO2_list[i] = IW_FO2
             del_iw_log_list[i] = del_iw_log
             fe_mols_list[i] = fe_mols_met
             feo_mols_list[i] = feo_mols
@@ -170,7 +156,6 @@ for i in range(len(Temp)):
             X_mg_wustite_FeO_list[i] = X_mg_wustite_FeO
             a_prime_list[i] = a_prime
             x_prime_list[i] = x_prime
-            Del_IW_list[i] = Del_IW
             break
         else:
             x_prime = x_prime + .01 * (K_O_D - K_O_D_fischer) / K_O_D_fischer * x_prime
@@ -181,22 +166,10 @@ for i in range(len(Temp)):
         X_mg_wustite_FeO_list[i] = np.nan
         x_prime_list[i] = np.nan
 
-# # create a list of NaN values to pad x_prime_iter_list
-# nan_list = np.repeat(np.nan, len(error_perc_list)-len(x_prime_iter_list))
+end_time = time.time()
+run_time = end_time - start_time
 
-# # pad x_prime_iter_list with NaN values
-# x_prime_iter_list_padded = np.concatenate([x_prime_iter_list, nan_list])
-
-# # plot the two lists
-# plt.plot(range(len(x_prime_iter_list_padded)), error_perc_list)
-# plt.xlabel('Iteration')
-# plt.ylabel('x_prime')
-# plt.show()
-
-
-
-print(f"K_O_D_fischer = {K_O_D_fischer:.5f}, K_O_D = {K_O_D:.5f}, X_mg_wustite_FeO = {X_mg_wustite_FeO:.5f}, x_prime = {x_prime:.5f}")
-
+print(f"Total run time: {run_time} seconds")
 # # Print the final results
 # print(f"K_O_D_list = {K_O_D_list}")
 # print(f"X_mg_wustite_FeO_list = {X_mg_wustite_FeO_list}")
@@ -204,7 +177,7 @@ print(f"K_O_D_fischer = {K_O_D_fischer:.5f}, K_O_D = {K_O_D:.5f}, X_mg_wustite_F
 # print(f"x_prime_list = {x_prime_list}")
 
 # Plot Del_IW_list
-plt.plot(Temp, X_mg_wustite_FeO_list, label='log fO2(IW) Reduced')
+plt.plot(Temp, del_iw_log_list, label='log fO2(IW) Reduced')
 plt.legend()
 plt.xlabel('Temperature (K)')
 plt.ylabel('log fO2(IW)')

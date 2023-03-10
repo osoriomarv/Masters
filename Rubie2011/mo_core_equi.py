@@ -77,27 +77,66 @@ O_mol_frac_pick = np.zeros(len(T_v))
 Si_mol_frac_pick = np.zeros(len(T_v))
 KD_O_frac_er = np.zeros(len(T_v))
 
+# Precompute variables
+FeO_i_plus_Ni_i = FeO_i + Ni_i
+FeO_i_plus_Ni_i_div_KD_Ni_v = FeO_i_plus_Ni_i / KD_Ni_v
+SiO2_i_plus_Si_i = SiO2_i + Si_i
+MgO_i_plus_AlO1_5_i_plus_CaO_i = MgO_i + AlO1_5_i + CaO_i
+
+FeO_guess_v_old = FeO_guess_v
+FeO_guess_v = np.linspace(FeO_guess_v_old.min() * 0.98, FeO_guess_v_old.max() * 1.04, int(1e3))
+
+# Vectorize loops
+T_v_2d, FeO_guess_v_2d = np.meshgrid(T_v, FeO_guess_v)
+KD_O_guess = np.empty_like(FeO_guess_v)
+FeO_mol_frac = np.empty_like(FeO_guess_v)
+NiO_mol_frac = np.empty_like(FeO_guess_v)
+SiO2_mol_frac = np.empty_like(FeO_guess_v)
+Fe_mol_frac = np.empty_like(FeO_guess_v)
+Ni_mol_frac = np.empty_like(FeO_guess_v)
+O_mol_frac = np.empty_like(FeO_guess_v)
+Si_mol_frac = np.empty_like(FeO_guess_v)
+iternum = np.arange(len(FeO_guess_v))
+melt_mols_logger = np.empty(len(T_v))
+metal_mols_logger = np.empty(len(T_v))
+KD_O_guess_logger = np.empty((len(FeO_guess_v), len(T_v)))
+min_pos_logger = np.empty(len(T_v))
+FeO_mol_frac_pick = np.empty(len(T_v))
+NiO_mol_frac_pick = np.empty(len(T_v))
+SiO2_mol_frac_pick = np.empty(len(T_v))
+Fe_mol_frac_pick = np.empty(len(T_v))
+Ni_mol_frac_pick = np.empty(len(T_v))
+O_mol_frac_pick = np.empty(len(T_v))
+Si_mol_frac_pick = np.empty(len(T_v))
+KD_O_frac_er = np.empty(len(T_v))
+min_pos = np.empty(len(T_v))
+
 for q in range(len(T_v)):
     T = T_v[q]
+    KD_Ni_v_q = KD_Ni_v[q]
+    FeO_i_plus_Fe_i = FeO_i + Fe_i
+    FeO_guess_v_old_min_pos = FeO_guess_v_old[min_pos[q]]
     for w in range(len(FeO_guess_v)):
         FeO_guess = FeO_guess_v[w]
 
-        NiO = FeO_guess * (NiO_i + Ni_i) / ((FeO_i + Fe_i - FeO_guess) * KD_Ni_v[q] + FeO_guess)
-        Fe = FeO_i + Fe_i - FeO_guess
+        NiO = FeO_guess * FeO_i_plus_Ni_i / (FeO_i_plus_Fe_i - FeO_guess) / KD_Ni_v_q + FeO_guess
+        Fe = FeO_i_plus_Fe_i - FeO_guess
         Ni = NiO_i + Ni_i - NiO
-        alpha = SiO2_i + Si_i
+        alpha = SiO2_i_plus_Si_i
         gamma = Fe + Ni + FeO_i + NiO_i + 3 * SiO2_i + O_i - FeO_guess - NiO + Si_i
-        sigma = FeO_guess + NiO + MgO_i + AlO1_5_i + CaO_i
+        sigma = FeO_guess + NiO + MgO_i_plus_AlO1_5_i_plus_CaO_i
 
         quad_a = 3 * FeO_guess**2 - Fe**2 * KD_Si_v[q]
         quad_b = -(gamma * FeO_guess**2 + 3 * alpha * FeO_guess**2 + Fe**2 * sigma * KD_Si_v[q])
         quad_c = alpha * gamma * FeO_guess**2
+
+        # Reuse variable root_solve
         root_solve = np.roots([quad_a, quad_b, quad_c])
         SiO2 = root_solve[1]
         O = FeO_i + NiO_i + SiO2_i * 2 + O_i + FeO_guess - NiO - 2 * SiO2
         Si = SiO2_i + Si_i - SiO2
 
-        melt_mols = FeO_guess + NiO + SiO2 + MgO_i + AlO1_5_i + CaO_i
+        melt_mols = FeO_guess + NiO + SiO2 + MgO_i_plus_AlO1_5_i_plus_CaO_i
         metal_mols = Fe + Ni + O + Si
 
         FeO_mol_frac[w] = FeO_guess / melt_mols
@@ -108,30 +147,79 @@ for q in range(len(T_v)):
         O_mol_frac[w] = O / metal_mols
         Si_mol_frac[w] = Si / metal_mols
 
-    melt_mols_logger[q] = melt_mols
-    metal_mols_logger[q] = metal_mols
+        KD_O_guess[w] = Fe_mol_frac[w] * O_mol_frac[w] / FeO_mol_frac[w]
+        KD_O_guess_logger[w, q] = KD_O_guess[w]
 
-    KD_O_guess[w] = Fe_mol_frac[w] * O_mol_frac[w] / FeO_mol_frac[w]
-    iternum[w] = w
-    KD_O_guess_logger[w, q] = Fe_mol_frac[w] * O_mol_frac[w] / FeO_mol_frac[w]
+melt_mols_logger[q] = melt_mols
+metal_mols_logger[q] = metal_mols
 
-min_pos = np.argmin(abs(KD_O_guess - KD_O_v[q]))
-min_pos_logger[q] = min_pos
+min_pos[q] = np.argmin(abs(KD_O_guess - KD_O_v[q]))
+min_pos_logger[q] = min_pos[q]
 
-FeO_mol_frac_pick[q] = FeO_mol_frac[min_pos]
-NiO_mol_frac_pick[q] = NiO_mol_frac[min_pos]
-SiO2_mol_frac_pick[q] = SiO2_mol_frac[min_pos]
-Fe_mol_frac_pick[q] = Fe_mol_frac[min_pos]
-Ni_mol_frac_pick[q] = Ni_mol_frac[min_pos]
-O_mol_frac_pick[q] = O_mol_frac[min_pos]
-Si_mol_frac_pick[q] = Si_mol_frac[min_pos]
-KD_O_frac_er[q] = (KD_O_guess[min_pos] - KD_O_v[q]) / KD_O_v[q]
-
-FeO_guess_v = np.linspace(FeO_guess_v[min_pos] * 0.98, FeO_guess_v[min_pos] * 1.04, int(1e3))
+FeO_mol_frac_pick[q] = FeO_mol_frac[min_pos[q]]
+NiO_mol_frac_pick[q] = NiO_mol_frac[min_pos[q]]
+SiO2_mol_frac_pick[q] = SiO2_mol_frac[min_pos[q]]
+Fe_mol_frac_pick[q] = Fe_mol_frac[min_pos[q]]
+Ni_mol_frac_pick[q] = Ni_mol_frac[min_pos[q]]
+O_mol_frac_pick[q] = O_mol_frac[min_pos[q]]
+Si_mol_frac_pick[q] = Si_mol_frac[min_pos[q]]
+KD_O_frac_er[q] = (KD_O_guess[min_pos[q]] - KD_O_v[q]) / KD_O_v[q]
 
 #Del IW  solution
 dIW = 2 * np.log10(FeO_mol_frac_pick / Fe_mol_frac_pick)
 
+
+# for q in range(len(T_v)):
+#     T = T_v[q]
+#     for w in range(len(FeO_guess_v)):
+#         FeO_guess = FeO_guess_v[w]
+
+#         NiO = FeO_guess * (NiO_i + Ni_i) / ((FeO_i + Fe_i - FeO_guess) * KD_Ni_v[q] + FeO_guess)
+#         Fe = FeO_i + Fe_i - FeO_guess
+#         Ni = NiO_i + Ni_i - NiO
+#         alpha = SiO2_i + Si_i
+#         gamma = Fe + Ni + FeO_i + NiO_i + 3 * SiO2_i + O_i - FeO_guess - NiO + Si_i
+#         sigma = FeO_guess + NiO + MgO_i + AlO1_5_i + CaO_i
+
+#         quad_a = 3 * FeO_guess**2 - Fe**2 * KD_Si_v[q]
+#         quad_b = -(gamma * FeO_guess**2 + 3 * alpha * FeO_guess**2 + Fe**2 * sigma * KD_Si_v[q])
+#         quad_c = alpha * gamma * FeO_guess**2
+#         root_solve = np.roots([quad_a, quad_b, quad_c])
+#         SiO2 = root_solve[1]
+#         O = FeO_i + NiO_i + SiO2_i * 2 + O_i + FeO_guess - NiO - 2 * SiO2
+#         Si = SiO2_i + Si_i - SiO2
+
+#         melt_mols = FeO_guess + NiO + SiO2 + MgO_i + AlO1_5_i + CaO_i
+#         metal_mols = Fe + Ni + O + Si
+
+#         FeO_mol_frac[w] = FeO_guess / melt_mols
+#         NiO_mol_frac[w] = NiO / melt_mols
+#         SiO2_mol_frac[w] = SiO2 / melt_mols
+#         Fe_mol_frac[w] = Fe / metal_mols
+#         Ni_mol_frac[w] = Ni / metal_mols
+#         O_mol_frac[w] = O / metal_mols
+#         Si_mol_frac[w] = Si / metal_mols
+
+#     melt_mols_logger[q] = melt_mols
+#     metal_mols_logger[q] = metal_mols
+
+#     KD_O_guess[w] = Fe_mol_frac[w] * O_mol_frac[w] / FeO_mol_frac[w]
+#     iternum[w] = w
+#     KD_O_guess_logger[w, q] = Fe_mol_frac[w] * O_mol_frac[w] / FeO_mol_frac[w]
+
+# min_pos = np.argmin(abs(KD_O_guess - KD_O_v[q]))
+# min_pos_logger[q] = min_pos
+
+# FeO_mol_frac_pick[q] = FeO_mol_frac[min_pos]
+# NiO_mol_frac_pick[q] = NiO_mol_frac[min_pos]
+# SiO2_mol_frac_pick[q] = SiO2_mol_frac[min_pos]
+# Fe_mol_frac_pick[q] = Fe_mol_frac[min_pos]
+# Ni_mol_frac_pick[q] = Ni_mol_frac[min_pos]
+# O_mol_frac_pick[q] = O_mol_frac[min_pos]
+# Si_mol_frac_pick[q] = Si_mol_frac[min_pos]
+# KD_O_frac_er[q] = (KD_O_guess[min_pos] - KD_O_v[q]) / KD_O_v[q]
+
+# FeO_guess_v = np.linspace(FeO_guess_v[min_pos] * 0.98, FeO_guess_v[min_pos] * 1.04, int(1e3))
 
 #Plots
 
