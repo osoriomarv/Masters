@@ -1,8 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+import time
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
 P = 10
-T_v = np.linspace(2000, 3500, round(3500 - 2000) * 4)
+T_v = np.linspace(1000, 2500, round(2500 - 1000) * 4)
+
+start_time = time.time()
 
 # partitioning expressions
 KD_Si_p = [1.3, -13500, 0]
@@ -109,7 +114,8 @@ Ni_mol_frac_pick = np.empty(len(T_v))
 O_mol_frac_pick = np.empty(len(T_v))
 Si_mol_frac_pick = np.empty(len(T_v))
 KD_O_frac_er = np.empty(len(T_v))
-min_pos = np.empty(len(T_v))
+min_pos = np.empty(len(T_v), dtype=int)
+
 
 for q in range(len(T_v)):
     T = T_v[q]
@@ -117,43 +123,50 @@ for q in range(len(T_v)):
     FeO_i_plus_Fe_i = FeO_i + Fe_i
     FeO_guess_v_old_min_pos = FeO_guess_v_old[min_pos[q]]
     for w in range(len(FeO_guess_v)):
-        FeO_guess = FeO_guess_v[w]
+        FeO_guess_v_2d, T_v_2d = np.meshgrid(FeO_guess_v, T_v)
+        NiO_v = FeO_guess_v_2d * FeO_i_plus_Ni_i / (FeO_i_plus_Fe_i - FeO_guess_v_2d) / KD_Ni_v[:, None] + FeO_guess_v_2d
+        Fe_v = FeO_i_plus_Fe_i - FeO_guess_v_2d
+        Ni_v = NiO_i + Ni_i - NiO_v
+        SiO2_i_plus_Si_i = np.atleast_1d(SiO2_i_plus_Si_i)
+        alpha_v = SiO2_i_plus_Si_i[:, None]
+        gamma_v = Fe_v + Ni_v + FeO_i + NiO_i + 3 * SiO2_i + O_i - FeO_guess_v_2d - NiO_v + Si_i
+        sigma_v = FeO_guess_v_2d + NiO_v + MgO_i_plus_AlO1_5_i_plus_CaO_i
 
-        NiO = FeO_guess * FeO_i_plus_Ni_i / (FeO_i_plus_Fe_i - FeO_guess) / KD_Ni_v_q + FeO_guess
-        Fe = FeO_i_plus_Fe_i - FeO_guess
-        Ni = NiO_i + Ni_i - NiO
-        alpha = SiO2_i_plus_Si_i
-        gamma = Fe + Ni + FeO_i + NiO_i + 3 * SiO2_i + O_i - FeO_guess - NiO + Si_i
-        sigma = FeO_guess + NiO + MgO_i_plus_AlO1_5_i_plus_CaO_i
+        quad_a = 3 * FeO_guess_v_2d**2 - Fe_v**2 * KD_Si_v[:, None]
+        quad_b = -(gamma_v * FeO_guess_v_2d**2 + 3 * alpha_v * FeO_guess_v_2d**2 + Fe_v**2 * sigma_v * KD_Si_v[:, None])
+        quad_c = alpha_v * gamma_v * FeO_guess_v_2d**2
 
-        quad_a = 3 * FeO_guess**2 - Fe**2 * KD_Si_v[q]
-        quad_b = -(gamma * FeO_guess**2 + 3 * alpha * FeO_guess**2 + Fe**2 * sigma * KD_Si_v[q])
-        quad_c = alpha * gamma * FeO_guess**2
+        quad_discriminant = np.sqrt(quad_b**2 - 4 * quad_a * quad_c)
+        FeO_guess_1 = (-quad_b - quad_discriminant) / (2 * quad_a)
+        FeO_guess_2 = (-quad_b + quad_discriminant) / (2 * quad_a)
+        FeO_guess_v_2d = np.where(FeO_guess_1 > FeO_guess_2, FeO_guess_1, FeO_guess_2)
+        SiO2_v = np.where(FeO_guess_1 > FeO_guess_2, (-quad_b - quad_discriminant) / (2 * quad_a),
+        (-quad_b + quad_discriminant) / (2 * quad_a))
+        O_v = FeO_i + NiO_i + SiO2_i * 2 + O_i + FeO_guess_v_2d - NiO_v - 2 * SiO2_v
 
-        # Reuse variable root_solve
-        root_solve = np.roots([quad_a, quad_b, quad_c])
-        SiO2 = root_solve[1]
-        O = FeO_i + NiO_i + SiO2_i * 2 + O_i + FeO_guess - NiO - 2 * SiO2
-        Si = SiO2_i + Si_i - SiO2
+        melt_mols_v = FeO_guess_v_2d + NiO_v + SiO2_v + MgO_i_plus_AlO1_5_i_plus_CaO_i
+        metal_mols_v = Fe_v + Ni_v + O_v + Si_i
 
-        melt_mols = FeO_guess + NiO + SiO2 + MgO_i_plus_AlO1_5_i_plus_CaO_i
-        metal_mols = Fe + Ni + O + Si
+        FeO_mol_frac_v = FeO_guess_v_2d / melt_mols_v
+        NiO_mol_frac_v = NiO_v / melt_mols_v
+        SiO2_mol_frac_v = SiO2_v / melt_mols_v
+        Fe_mol_frac_v = Fe_v / metal_mols_v
+        Ni_mol_frac_v = Ni_v / metal_mols_v
+        O_mol_frac_v = O_v / metal_mols_v
+        Si_mol_frac_v = Si_i / metal_mols_v
 
-        FeO_mol_frac[w] = FeO_guess / melt_mols
-        NiO_mol_frac[w] = NiO / melt_mols
-        SiO2_mol_frac[w] = SiO2 / melt_mols
-        Fe_mol_frac[w] = Fe / metal_mols
-        Ni_mol_frac[w] = Ni / metal_mols
-        O_mol_frac[w] = O / metal_mols
-        Si_mol_frac[w] = Si / metal_mols
+e = 0
+for w in range(len(FeO_guess_v)-1):
+    if abs(KD_O_guess[w]-KD_O_v[q]) > abs(KD_O_guess[w+1]-KD_O_v[q]):
+        min_pos_2_logger[q, e] = w+1
+        min_pos_2 = w
+    else:
+        e = e+1
 
-        KD_O_guess[w] = Fe_mol_frac[w] * O_mol_frac[w] / FeO_mol_frac[w]
-        KD_O_guess_logger[w, q] = KD_O_guess[w]
+melt_mols_logger[q] = melt_mols_v
+metal_mols_logger[q] = metal_mols_v
 
-melt_mols_logger[q] = melt_mols
-metal_mols_logger[q] = metal_mols
-
-min_pos[q] = np.argmin(abs(KD_O_guess - KD_O_v[q]))
+min_pos[q] = int(np.argmin(abs(KD_O_guess - KD_O_v[q])))
 min_pos_logger[q] = min_pos[q]
 
 FeO_mol_frac_pick[q] = FeO_mol_frac[min_pos[q]]
@@ -167,6 +180,152 @@ KD_O_frac_er[q] = (KD_O_guess[min_pos[q]] - KD_O_v[q]) / KD_O_v[q]
 
 #Del IW  solution
 dIW = 2 * np.log10(FeO_mol_frac_pick / Fe_mol_frac_pick)
+
+#Plots
+
+
+end_time = time.time()
+run_time = end_time - start_time
+print(f"Total run time: {run_time/60} seconds")
+
+# figure 1
+fig1 = plt.figure(1)
+plt.plot(FeO_guess_v, np.log10(KD_O_guess), ':k', [min(FeO_guess_v), max(FeO_guess_v)], [np.log10(KD_O_v[q]), np.log10(KD_O_v[q])], '-k')
+plt.xlabel('FeO guess')
+plt.ylabel('log10(KDO)')
+plt.legend(['guess', 'Fischer'])
+plt.show()
+
+# figure 2
+fig2 = plt.figure(2)
+plt.subplot(3, 3, 1)
+plt.plot(FeO_guess_v, SiO2_mol_frac, '-k', max(FeO_guess_v), melt_mol_frac_i[0], 'ok')
+plt.title('SiO2')
+plt.subplot(3, 3, 2)
+plt.plot(FeO_guess_v, FeO_mol_frac, '-k', max(FeO_guess_v), melt_mol_frac_i[2], 'ok')
+plt.title('FeO')
+plt.subplot(3, 3, 3)
+plt.plot(FeO_guess_v, NiO_mol_frac, '-k', max(FeO_guess_v), melt_mol_frac_i[5], 'ok')
+plt.title('NiO')
+plt.subplot(3, 3, 4)
+plt.plot(FeO_guess_v, Fe_mol_frac, '-k', max(FeO_guess_v), metal_mol_frac_i[0], 'ok')
+plt.title('Fe')
+plt.subplot(3, 3, 5)
+plt.plot(FeO_guess_v, Ni_mol_frac, '-k', max(FeO_guess_v), metal_mol_frac_i[1], 'ok')
+plt.title('Ni')
+plt.subplot(3, 3, 6)
+plt.plot(FeO_guess_v, O_mol_frac, '-k', max(FeO_guess_v), metal_mol_frac_i[2], 'ok')
+plt.title('O')
+plt.subplot(3, 3, 7)
+plt.plot(FeO_guess_v, Si_mol_frac, '-k', max(FeO_guess_v), metal_mol_frac_i[3], 'ok')
+plt.title('Si')
+plt.show()
+
+# figure 3
+fig3 = plt.figure(3)
+plt.subplot(3, 3, 1)
+plt.plot(T_v, SiO2_mol_frac_pick, '-k', [min(T_v), max(T_v)], [melt_mol_frac_i[0], melt_mol_frac_i[0]], ':k')
+plt.title('SiO2')
+plt.subplot(3, 3, 2)
+plt.plot(T_v, FeO_mol_frac_pick, '-k', [min(T_v), max(T_v)], [melt_mol_frac_i[2], melt_mol_frac_i[2]], ':k')
+plt.title('FeO')
+plt.subplot(3, 3, 3)
+plt.plot(T_v, NiO_mol_frac_pick, '-k', [min(T_v), max(T_v)], [melt_mol_frac_i[5], melt_mol_frac_i[5]], ':k')
+plt.title('NiO')
+plt.subplot(3, 3, 4)
+plt.plot(T_v, Fe_mol_frac_pick, '-k', [min(T_v), max(T_v)], [metal_mol_frac_i[0], metal_mol_frac_i[0]], ':k')
+plt.title('Fe')
+plt.subplot(3, 3, 5)
+plt.plot(T_v, Ni_mol_frac_pick, '-k', [min(T_v), max(T_v)], [metal_mol_frac_i[1], metal_mol_frac_i[1]], ':k')
+plt.title('Ni')
+plt.subplot(3, 3, 6)
+plt.plot(T_v, O_mol_frac_pick, '-k', [min(T_v), max(T_v)], [metal_mol_frac_i[2], metal_mol_frac_i[2]], ':k')
+plt.title('O')
+plt.subplot(3, 3, 7)
+plt.plot(T_v, Si_mol_frac_pick, '-k', [min(T_v), max(T_v)], [metal_mol_frac_i[3], metal_mol_frac_i[3]], ':k')
+plt.title('Si')
+plt.show()
+
+#figure 4
+fig4 = plt.figure(4)
+plt.plot(FeO_guess_v, (KD_O_guess - KD_O_v[q]))
+plt.xlabel('FeO guess')
+plt.ylabel('KDO guess - KDO Fischer')
+plt.title('FeO_Guess_v')
+plt.show()
+
+#figure 5
+fig5 = plt.figure(5)
+plt.plot(T_v, dIW, '-k')
+plt.xlabel('T, K')
+plt.ylabel('IW')
+plt.title('IW')
+plt.show()
+
+#figure 6
+fig6 = plt.figure(6)
+plt.plot(T_v, metal_mols_logger, '-b')
+plt.plot(T_v, melt_mols_logger, '-r')
+plt.ylabel('mols')
+plt.xlabel('T (K)')
+plt.title('Mol_logger')
+plt.show()
+
+#igure 7
+fig7 = plt.figure(7)
+plt.plot(min_pos_logger)
+plt.ylabel('index of selected FeO')
+plt.xlabel('solution #')
+plt.title('position of solution')
+plt.show()
+
+# #figure 8
+# fig8 = plt.figure(8)
+# plt.plot(np.log10(np.abs(KD_O_guess_logger[:, 974] - KD_O_v[974))))
+# plt.plot(np.log10(np.abs(KD_O_guess_logger[:, 975] - KD_O_v(975))))
+# plt.plot(np.log10(np.abs(KD_O_guess_logger[:, 976] - KD_O_v(976))))
+# plt.plot(np.log10(np.abs(KD_O_guess_logger[:, 977] - KD_O_v(977))))
+# plt.legend(['974', '975', '976', '977'])
+# plt.xlabel('guess #')
+# plt.ylabel('log10(KDo guess - KDO) absolute value')
+# plt.title('difference in position')
+# plt.show()
+
+
+
+        # FeO_guess = FeO_guess_v[w]
+
+        # NiO = FeO_guess * FeO_i_plus_Ni_i / (FeO_i_plus_Fe_i - FeO_guess) / KD_Ni_v_q + FeO_guess
+        # Fe = FeO_i_plus_Fe_i - FeO_guess
+        # Ni = NiO_i + Ni_i - NiO
+        # alpha = SiO2_i_plus_Si_i
+        # gamma = Fe + Ni + FeO_i + NiO_i + 3 * SiO2_i + O_i - FeO_guess - NiO + Si_i
+        # sigma = FeO_guess + NiO + MgO_i_plus_AlO1_5_i_plus_CaO_i
+
+        # quad_a = 3 * FeO_guess**2 - Fe**2 * KD_Si_v[q]
+        # quad_b = -(gamma * FeO_guess**2 + 3 * alpha * FeO_guess**2 + Fe**2 * sigma * KD_Si_v[q])
+        # quad_c = alpha * gamma * FeO_guess**2
+
+        # # Reuse variable root_solve
+        # root_solve = np.roots([quad_a, quad_b, quad_c])
+        # SiO2 = root_solve[1]
+        # O = FeO_i + NiO_i + SiO2_i * 2 + O_i + FeO_guess - NiO - 2 * SiO2
+        # Si = SiO2_i + Si_i - SiO2
+
+        # melt_mols = FeO_guess + NiO + SiO2 + MgO_i_plus_AlO1_5_i_plus_CaO_i
+        # metal_mols = Fe + Ni + O + Si
+
+        # FeO_mol_frac[w] = FeO_guess / melt_mols
+        # NiO_mol_frac[w] = NiO / melt_mols
+        # SiO2_mol_frac[w] = SiO2 / melt_mols
+        # Fe_mol_frac[w] = Fe / metal_mols
+        # Ni_mol_frac[w] = Ni / metal_mols
+        # O_mol_frac[w] = O / metal_mols
+        # Si_mol_frac[w] = Si / metal_mols
+
+        # KD_O_guess[w] = Fe_mol_frac[w] * O_mol_frac[w] / FeO_mol_frac[w]
+        # KD_O_guess_logger[w, q] = KD_O_guess[w]
+
 
 
 # for q in range(len(T_v)):
@@ -220,102 +379,3 @@ dIW = 2 * np.log10(FeO_mol_frac_pick / Fe_mol_frac_pick)
 # KD_O_frac_er[q] = (KD_O_guess[min_pos] - KD_O_v[q]) / KD_O_v[q]
 
 # FeO_guess_v = np.linspace(FeO_guess_v[min_pos] * 0.98, FeO_guess_v[min_pos] * 1.04, int(1e3))
-
-#Plots
-
-# figure 1
-fig1 = plt.figure(1)
-plt.plot(FeO_guess_v, np.log10(KD_O_guess), ':k', [min(FeO_guess_v), max(FeO_guess_v)], [np.log10(KD_O_v(q)), np.log10(KD_O_v(q))], '-k')
-plt.xlabel('FeO guess')
-plt.ylabel('log10(KDO)')
-plt.legend(['guess', 'Fischer'])
-
-# figure 2
-fig2 = plt.figure(2)
-plt.subplot(3, 3, 1)
-plt.plot(FeO_guess_v, SiO2_mol_frac, '-k', max(FeO_guess_v), melt_mol_frac_i[0], 'ok')
-plt.title('SiO2')
-plt.subplot(3, 3, 2)
-plt.plot(FeO_guess_v, FeO_mol_frac, '-k', max(FeO_guess_v), melt_mol_frac_i[2], 'ok')
-plt.title('FeO')
-plt.subplot(3, 3, 3)
-plt.plot(FeO_guess_v, NiO_mol_frac, '-k', max(FeO_guess_v), melt_mol_frac_i[5], 'ok')
-plt.title('NiO')
-plt.subplot(3, 3, 4)
-plt.plot(FeO_guess_v, Fe_mol_frac, '-k', max(FeO_guess_v), metal_mol_frac_i[0], 'ok')
-plt.title('Fe')
-plt.subplot(3, 3, 5)
-plt.plot(FeO_guess_v, Ni_mol_frac, '-k', max(FeO_guess_v), metal_mol_frac_i[1], 'ok')
-plt.title('Ni')
-plt.subplot(3, 3, 6)
-plt.plot(FeO_guess_v, O_mol_frac, '-k', max(FeO_guess_v), metal_mol_frac_i[2], 'ok')
-plt.title('O')
-plt.subplot(3, 3, 7)
-plt.plot(FeO_guess_v, Si_mol_frac, '-k', max(FeO_guess_v), metal_mol_frac_i[3], 'ok')
-plt.title('Si')
-
-# figure 3
-fig3 = plt.figure(3)
-plt.subplot(3, 3, 1)
-plt.plot(T_v, SiO2_mol_frac_pick, '-k', [min(T_v), max(T_v)], [melt_mol_frac_i[0], melt_mol_frac_i[0]], ':k')
-plt.title('SiO2')
-plt.subplot(3, 3, 2)
-plt.plot(T_v, FeO_mol_frac_pick, '-k', [min(T_v), max(T_v)], [melt_mol_frac_i[2], melt_mol_frac_i[2]], ':k')
-plt.title('FeO')
-plt.subplot(3, 3, 3)
-plt.plot(T_v, NiO_mol_frac_pick, '-k', [min(T_v), max(T_v)], [melt_mol_frac_i[5], melt_mol_frac_i[5]], ':k')
-plt.title('NiO')
-plt.subplot(3, 3, 4)
-plt.plot(T_v, Fe_mol_frac_pick, '-k', [min(T_v), max(T_v)], [metal_mol_frac_i[0], metal_mol_frac_i[0]], ':k')
-plt.title('Fe')
-plt.subplot(3, 3, 5)
-plt.plot(T_v, Ni_mol_frac_pick, '-k', [min(T_v), max(T_v)], [metal_mol_frac_i[1], metal_mol_frac_i[1]], ':k')
-plt.title('Ni')
-plt.subplot(3, 3, 6)
-plt.plot(T_v, O_mol_frac_pick, '-k', [min(T_v), max(T_v)], [metal_mol_frac_i[2], metal_mol_frac_i[2]], ':k')
-plt.title('O')
-plt.subplot(3, 3, 7)
-plt.plot(T_v, Si_mol_frac_pick, '-k', [min(T_v), max(T_v)], [metal_mol_frac_i[3], metal_mol_frac_i[3]], ':k')
-plt.title('Si')
-#figure 4
-
-fig4 = plt.figure(4)
-plt.plot(FeO_guess_v, (KD_O_guess - KD_O_v(q)))
-plt.xlabel('FeO guess')
-plt.ylabel('KDO guess - KDO Fischer')
-plt.title('FeO_Guess_v')
-
-
-#figure 5
-fig5 = plt.figure(5)
-plt.plot(T_v, dIW, '-k')
-plt.xlabel('T, K')
-plt.ylabel('IW')
-plt.title('IW')
-
-#figure 6
-fig6 = plt.figure(6)
-plt.plot(T_v, metal_mols_logger, '-b')
-plt.plot(T_v, melt_mols_logger, '-r')
-plt.ylabel('mols')
-plt.xlabel('T (K)')
-plt.title('Mol_logger')
-
-#igure 7
-fig7 = plt.figure(7)
-plt.plot(min_pos_logger)
-plt.ylabel('index of selected FeO')
-plt.xlabel('solution #')
-plt.title('position of solution')
-
-#figure 8
-fig8 = plt.figure(8)
-plt.plot(np.log10(np.abs(KD_O_guess_logger[:, 974] - KD_O_v(974))))
-plt.plot(np.log10(np.abs(KD_O_guess_logger[:, 975] - KD_O_v(975))))
-plt.plot(np.log10(np.abs(KD_O_guess_logger[:, 976] - KD_O_v(976))))
-plt.plot(np.log10(np.abs(KD_O_guess_logger[:, 977] - KD_O_v(977))))
-plt.legend(['974', '975', '976', '977'])
-plt.xlabel('guess #')
-plt.ylabel('log10(KDo guess - KDO) absolute value')
-plt.title('difference in position')
-plt.show()

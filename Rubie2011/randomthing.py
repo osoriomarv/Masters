@@ -77,9 +77,7 @@ x_prime_list = np.zeros(len(max_iter))
 a_prime_list = np.zeros(len(Temp))
 Del_IW_list = np.zeros(len(Temp))
 IW_FO2_list = np.zeros(len(Temp))
-si_mols_met_list = np.zeros(len(Temp))
-ni_mols_met_list = np.zeros(len(Temp))
-o_mols_met_list= np.zeros(len(Temp))
+
 
 x_prime_iter_list = []
 
@@ -115,43 +113,43 @@ for i in range(len(Temp)):
         B = (gamma * x_prime ** 2 + 3 * alpha * x_prime ** 2 + a_prime ** 2 * sigma * (K_Si_D))  # S17 B
         C = alpha * gamma * x_prime ** 2  # S17 C
         z_prime = (-B + np.sqrt(B ** 2 - 4 * A * C)) / (2 * A) # S 17 Solve for z'
-
+        
         # Step 5
         c_prime = x + y + 2 * z + c - x_prime - y_prime - 2 * z_prime  # S14 C
         d_prime = z + d - z_prime  # S14 D
+
+        #melt_mols = x_prime + y + z + u + m + n 
+
+        melt_mols = x_prime + y_prime + z_prime  + u + m + n
+        metal_mols = a_prime + b_prime + c_prime + d_prime
+
+        print(melt_mols)
         # Step 6
         X_sil_FeO = x_prime / (x_prime + y_prime + z_prime + (u + m + n))
         X_mg_wustite_FeO = 1.148 * X_sil_FeO + 1.319 * X_sil_FeO ** 2  # S6
 
+        FeO_mol_frac = x_prime / melt_mols
+        NiO_mol_frac = y_prime / melt_mols
+        SiO2_mol_frac = z_prime / melt_mols
+        Fe_mol_frac = a_prime / melt_mols
+        Ni_mol_frac = b_prime / melt_mols
+        O_mol_frac = c_prime / melt_mols
+        Si_mol_frac = d_prime / melt_mols
+
+        melt_mols_list = melt_mols
+        metal_mols_list = metal_mols
+
         # Step 7
         # Sub into S11
-        K_O_D_1 = a_prime * b_prime
-        K_O_D_2 = X_sil_FeO * (a_prime + b_prime + c_prime + d_prime) ** 2
-        K_O_D = K_O_D_1 / K_O_D_2
+        K_O_D = Fe_mol_frac * O_mol_frac / FeO_mol_frac
 
         # Check convergence
         # print(np.abs(K_O_D - K_O_D_fischer) / K_O_D_fischer)
 
         if abs((K_O_D - K_O_D_fischer) / K_O_D_fischer).all() < 0.01:
             #print(f"At Temp = {Temp[i]:.0f}K and P = {Pressures:.1f}GPa, K_O_D has converged to {K_O_D:.5f}")
-            fe_mols_met = a_prime/(a_prime + b_prime + c_prime + d_prime)
-            ni_mols_met = b_prime/(a_prime + b_prime + c_prime + d_prime)
-            o_mols_met = c_prime/(a_prime + b_prime + c_prime + d_prime)
-            si_mols_met = d_prime/(a_prime + b_prime + c_prime + d_prime)
-
-            feo_mols = x_prime/(x_prime + y_prime + z_prime + (u + m + n))
-            nio_mols = y_prime/(x_prime + y_prime + z_prime + (u + m + n))
-            sio2_mols = z_prime/(x_prime + y_prime + z_prime + (u + m + n))
-            #Calc del_Iw = 2*log10(x_sil_FeO/x_met_fe)
-
-            del_iw_log = 2*np.log10(feo_mols/fe_mols_met)   
+            del_iw_log = 2*np.log10(FeO_mol_frac/Fe_mol_frac)   
             
-            si_mols_met_list[i] = si_mols_met
-            ni_mols_met_list[i] = ni_mols_met
-            o_mols_met_list[i] = o_mols_met
-            del_iw_log_list[i] = del_iw_log
-            fe_mols_list[i] = fe_mols_met
-            feo_mols_list[i] = feo_mols
             K_O_D_list[i] = K_O_D
             X_mg_wustite_FeO_list[i] = X_mg_wustite_FeO
             a_prime_list[i] = a_prime
@@ -176,31 +174,49 @@ print(f"Total run time: {run_time} seconds")
 # print(f"a_prime = {a_prime_list}")
 # print(f"x_prime_list = {x_prime_list}")
 
-# Plot Del_IW_list
-plt.plot(Temp, del_iw_log_list, label='log fO2(IW) Reduced')
-plt.legend()
-plt.xlabel('Temperature (K)')
-plt.ylabel('log fO2(IW)')
-plt.text(1995, -2, 'Pressure: 10 GPa', fontsize=10) # add text annotation
+# figure 1
+fig1 = plt.figure(1)
+plt.plot(max_iter, (K_O_D_fischer), ':k',)
+plt.xlabel('FeO guess')
+plt.ylabel('log10(KDO)')
+plt.legend(['guess', 'Fischer'])
 plt.show()
 
-plt.plot(Temp, si_mols_met_list, label='Si')
-plt.plot(Temp, fe_mols_list, label='Fe')
-plt.plot(Temp, ni_mols_met_list, label='Ni')
-plt.plot(Temp, o_mols_met_list, label='O')
-plt.legend()
-plt.xlabel('Temperature (K)')
-plt.ylabel('Metal Mole Fraction')
-plt.text(1995, -2, 'Pressure: 10 GPa', fontsize=10) # add text annotation
+#figure 5
+fig5 = plt.figure(5)
+plt.plot(Temp, del_iw_log, '-k')
+plt.xlabel('T, K')
+plt.ylabel('IW')
+plt.title('IW')
 plt.show()
 
-# Plot K_O_D and K_O_D_fischer
-plt.plot(Temp, K_O_D_list, label='K_O_D')
-plt.plot(Temp, [round(10 ** (a_i[2] + (b_i[2] / T) + (c_i[2] * Pressures) / T), 5) for T in Temp], label='K_O_D_fischer')
-plt.legend()
-plt.xlabel('Temperature (K)')
-plt.ylabel('K_O_D')
-plt.show()
+
+
+# # Plot Del_IW_list
+# plt.plot(Temp, del_iw_log_list, label='log fO2(IW) Reduced')
+# plt.legend()
+# plt.xlabel('Temperature (K)')
+# plt.ylabel('log fO2(IW)')
+# plt.text(1995, -2, 'Pressure: 10 GPa', fontsize=10) # add text annotation
+# plt.show()
+
+# plt.plot(Temp, si_mols_met_list, label='Si')
+# plt.plot(Temp, fe_mols_list, label='Fe')
+# plt.plot(Temp, ni_mols_met_list, label='Ni')
+# plt.plot(Temp, o_mols_met_list, label='O')
+# plt.legend()
+# plt.xlabel('Temperature (K)')
+# plt.ylabel('Metal Mole Fraction')
+# plt.text(1995, -2, 'Pressure: 10 GPa', fontsize=10) # add text annotation
+# plt.show()
+
+# # Plot K_O_D and K_O_D_fischer
+# plt.plot(Temp, K_O_D_list, label='K_O_D')
+# plt.plot(Temp, [round(10 ** (a_i[2] + (b_i[2] / T) + (c_i[2] * Pressures) / T), 5) for T in Temp], label='K_O_D_fischer')
+# plt.legend()
+# plt.xlabel('Temperature (K)')
+# plt.ylabel('K_O_D')
+# plt.show()
 
 
 
