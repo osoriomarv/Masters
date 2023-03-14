@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from math import log10, exp
+
 
 #def NobleGasDistribution(SiO2,TiO2,Al2O3,FeO,Fe2O3,MgO,CaO,Na2O,K2O,radius,radius2,Taccretion):
     # Index the oxides to be used for calculations of molar fractions
@@ -153,10 +155,6 @@ plt.ylabel('Temperature at bottom of atmosphere', fontsize=14)
 plt.title('Temperature as radius increases')
 plt.show()
 
-
-import pandas as pd
-import numpy as np
-
 # Load data from Excel file
 data4 = pd.read_excel('nbIP.xlsx', sheet_name='Sheet1', usecols='D', skiprows=1).values
 data3 = pd.read_excel('nbIP.xlsx', sheet_name='Sheet4').values
@@ -262,4 +260,116 @@ for x in range(num_f):
                 
                 negativelnxi = alpha[2] * IP + beta[2]
 
+
+tc = 5.1953
+pc_pa = 227460
+R = 8.314
+
+a = 0.42748 * (R ** 2 * tc ** 2.5) / pc_pa
+b = 0.08664 * (R * tc / pc_pa)
+
+RKEOS_g = (R * T_v[0]) / Pressure_bottom[0]
+
+num_search = 100
+RKEOS = np.zeros(num_search)
+
+V_mol = np.zeros(len(Pressure_bottom))
+A_squared = np.zeros(len(Pressure_bottom))
+B = np.zeros(len(Pressure_bottom))
+Z = np.zeros(len(Pressure_bottom))
+ln_fugacitycoeff = np.zeros(len(Pressure_bottom))
+fugacitycoeff = np.zeros(len(Pressure_bottom))
+ccSTPgHe_bar = np.zeros(len(Pressure_bottom))
+He_sol_g_g = np.zeros(len(px))
+solubility_he = np.zeros(len(Pressure_bottom))
+BseHe = np.zeros(len(Pressure_bottom))
+Cmetal = np.zeros(len(Pressure_bottom))
+core = np.zeros(len(Pressure_bottom))
+Hesum = np.zeros(len(Pressure_bottom))
+atmpercent = np.zeros(len(Pressure_bottom))
+BSE = np.zeros(len(Pressure_bottom))
+Core = np.zeros(len(Pressure_bottom))
+
+for p in range(len(Pressure_bottom)):
+    v_v = np.logspace(log10(RKEOS_g / 10), log10(RKEOS_g * 2), num_search)
+    for i in range(len(v_v)):
+        RKEOS[i] = ((R * T_v[p]) / (v_v[i] - b)) - (a / ((v_v[i] * (v_v[i] + b)) * T_v[p] ** 0.5)) - Pressure_bottom[p]
+
+    min_val_i = np.argmin(np.abs(RKEOS))
+
+    V_mol[p] = v_v[min_val_i]
+    RKEOS_g = V_mol[p]
+
+    A_squared[p] = (0.42748 * tc ** (5 / 2)) / (pc_pa * T_v[p] ** (5 / 2))
+    B[p] = 0.08664 * tc / (pc_pa * T_v[p])
+
+    Z[p] = (Pressure_bottom[p] * V_mol[p]) / (R * T_v[p])
+
+    ln_fugacitycoeff[p] = Z[p] - 1 - np.log(Z[p] - B[p] * Pressure_bottom[p]) - (A_squared[p] / B[p]) * np.log(1 + ((B[p] * Pressure_bottom[p]) / Z[p]))
+
+    fugacitycoeff[p] = exp(ln_fugacitycoeff[p])
+
+    ccSTPgHe_bar[p] = exp(negativelnxi[p]) * 22414 * (px[p] / 1e5) * (fugacitycoeff[p] / wt_onemol)
+
+    He_sol_g_g[p] = (1e5 * (ccSTPgHe_bar[p] / 1e6)) / (298.15 * 8.314) * 4.0026
+
+    BseHe[p] = He_sol_g_g[p] * (mbse[p])
+
+    Cmetal[p] = Dhe * He_sol_g_g[p]
+
+    core[p] = (Cmetal[p] * mcore[p])
+
+    Hesum[p] = core[p] + BseHe[p] + Matmhe[p]
+
+    for c in range(len(Hesum)):
+        atmpercent[c] = (Matmhe[c] / Hesum[c]) * 100
+        BSE[c] = (BseHe[c] / Hesum[c]) * 100
+        Core[c] = (core[c] / Hesum[c]) * 100
+
+import matplotlib.pyplot as plt
+
+# Figure 1
+fig1, ax1 = plt.subplots()
+ax1.plot(r_v, atmpercent, color=[0, 0.5, 0], linewidth=1.5)
+ax1.plot(r_v, BSE, '-b', linewidth=1.5)
+ax1.plot(r_v, Core, '-k', linewidth=2.5)
+ax1.legend(['Atm Percent', 'Bulk Silicate Earth', 'Core'], loc='best', frameon=False)
+ax1.set_xlabel('Planetary Radius (Km)', fontsize=16)
+ax1.set_ylabel('% Helium Distribution', fontsize=16)
+ax1.set_title('Helium Distribution with Planetary Growth', fontsize=16)
+
+# Figure 2
+fig2, ax2 = plt.subplots()
+ax2.plot(r_v, [np.log10(y) for y in core], '-k', linewidth=1.5)
+ax2.legend(['Core'], loc='best', frameon=False)
+ax2.set_xlabel('Planetary Radius (Km)', fontsize=16)
+ax2.set_ylabel('Log10 Helium Distribution (Grams)', fontsize=16)
+ax2.set_title('Helium Distribution with Planetary Growth', fontsize=16)
+ax2.set_yscale('log')
+
+# Figure 3
+fig3, ax3 = plt.subplots()
+ax3.plot(r_v, [np.log10(y) for y in Matmhe], '-y', linewidth=1.5)
+ax3.plot(r_v, [np.log10(y) for y in BseHe], '-k', linewidth=1.5)
+ax3.plot(r_v, [np.log10(y) for y in Core], '-b', linewidth=1.5)
+ax3.legend(['Atm Percent', 'Bulk Silicate Earth', 'Core'], loc='best', frameon=False)
+ax3.set_xlabel('Planetary Radius (Km)', fontsize=16)
+ax3.set_ylabel('% Helium Distribution', fontsize=16)
+ax3.set_title('Helium Distribution with Planetary Growth', fontsize=16)
+
+# Figure 10
+fig10, ax10 = plt.subplots()
+ax10.plot(r_v, T_v, '-k', linewidth=1.5)
+ax10.set_xlabel('Radius Km', fontsize=14)
+ax10.set_ylabel('Temperature at bottom of atmosphere, K', fontsize=14)
+ax10.set_title('Temperature as radius increases', fontsize=16)
+
+# Figure 11
+fig11, ax11 = plt.subplots()
+ax11.plot(r_v, p_v, '-k', linewidth=1.5)
+ax11.set_xlabel('Radius, Km', fontsize=14)
+ax11.set_ylabel('Pressure at bottom of atmosphere, MPa', fontsize=14)
+ax11.set_title('Pressure as radius increases', fontsize=16)
+
+plt.show()
 
