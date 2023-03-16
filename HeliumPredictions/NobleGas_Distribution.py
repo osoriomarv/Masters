@@ -11,7 +11,7 @@ def NobleGasDistribution(SiO2,TiO2,Al2O3,FeO,Fe2O3,MgO,CaO,Na2O,K2O,radius,radiu
 
     # R_v or radius vector. It takes in the initial radius and the radius2 to
     # space create a spaced out vector in steps of 10.
-    r_v = np.arange(radius, radius2+10, 10)
+    r_v = np.linspace(radius, radius2, 100)
     #r_v = np.linspace(3310,7500,1000)
 
     # Number of species considered
@@ -440,7 +440,7 @@ def NobleGasDistribution(SiO2,TiO2,Al2O3,FeO,Fe2O3,MgO,CaO,Na2O,K2O,radius,radiu
     plt.show()
 
 if __name__ == "__main__":
-    NobleGasDistribution(48.88,1.73,16.77,9.71,0.00,6.65,9.86,3.62,1.93,3000,9000,1e6)
+    NobleGasDistribution(48.88,1.73,16.77,9.71,0.00,6.65,9.86,3.62,1.93,6378,6379,1e6)
 
        
 

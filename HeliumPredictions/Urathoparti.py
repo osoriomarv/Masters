@@ -54,6 +54,7 @@ U_amu = 238.02891
 Th_amu = 232.03806
 # Input parameters
 t = 4.64 #Billion years ago
+
 U_concetration_mol_g = 0.02 / 1e6 / U_amu
 Th_concentration_mol_g = 0.08 / 1e6 / Th_amu
 mass_bse = 3.9663e+27
